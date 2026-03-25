@@ -6,6 +6,11 @@ import com.baitap.gate.model.JobPayload;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
+// 3 thư viện mới thêm vào để tạo Web Server
+import com.sun.net.httpserver.HttpServer;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Optional;
@@ -57,6 +62,23 @@ public class GateMain {
         System.out.println("Cổng " + gateId + " đang hoạt động; thời gian xử lý là " + processSeconds + " giây");
 
         Runtime.getRuntime().addShutdownHook(new Thread(ds::close));
+
+        // --- ĐOẠN CODE LÁCH LUẬT RENDER (TẠO WEB SERVER GIẢ) ---
+        // Lấy port do Render cấp tự động, nếu chạy ở máy tính thì mặc định là 8080
+        int port = parseInt(System.getenv("PORT"), 8080);
+        HttpServer dummyServer = HttpServer.create(new InetSocketAddress(port), 0);
+        // Biến gateId bên trong lambda (hàm ẩn danh) phải là final hoặc effectively final
+        final String currentGateId = gateId; 
+        dummyServer.createContext("/", exchange -> {
+            String response = "Gate " + currentGateId + " dang hoat dong ngon lanh!";
+            exchange.sendResponseHeaders(200, response.getBytes().length);
+            OutputStream os = exchange.getResponseBody();
+            os.write(response.getBytes());
+            os.close();
+        });
+        dummyServer.start();
+        System.out.println("Đã khởi động Web Server giả tại port " + port + " để đánh lừa Render!");
+        // --- KẾT THÚC ĐOẠN CODE LÁCH LUẬT ---
 
         long idleSleepMs = 500;
         while (true) {
