@@ -1,0 +1,11 @@
+# Bỏ qua thư mục build của Maven
+target/
+
+# Bỏ qua các file cấu hình của Eclipse
+.settings/
+.classpath
+.project
+
+# Bỏ qua các file biên dịch
+*.class
+.metadata/
