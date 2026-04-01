@@ -59,13 +59,33 @@ public class GateMain {
         int port = parseInt(System.getenv("PORT"), 8080);
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
 
-        // --- API 1: Lách luật Render (Báo cáo sức khỏe) ---
+     // --- API 1: HIỂN THỊ GIAO DIỆN WEB CHO NGƯỜI DÙNG ---
         server.createContext("/", exchange -> {
-            String response = "Gate " + currentGateId + " dang hoat dong o che do P2P!";
-            exchange.sendResponseHeaders(200, response.getBytes().length);
-            OutputStream os = exchange.getResponseBody();
-            os.write(response.getBytes());
-            os.close();
+            if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                // Đọc file index.html từ thư mục resources
+                try (InputStream is = GateMain.class.getClassLoader().getResourceAsStream("index.html")) {
+                    if (is != null) {
+                        // Nếu tìm thấy file HTML -> Ép sang dạng Byte và gửi cho trình duyệt
+                        byte[] htmlBytes = is.readAllBytes();
+                        // Báo cho trình duyệt biết đây là file HTML để nó hiển thị giao diện
+                        exchange.getResponseHeaders().add("Content-Type", "text/html; charset=UTF-8");
+                        exchange.sendResponseHeaders(200, htmlBytes.length);
+                        OutputStream os = exchange.getResponseBody();
+                        os.write(htmlBytes);
+                        os.close();
+                    } else {
+                        // Nếu quên chưa tạo file index.html thì hiện cảnh báo
+                        String response = "<h1>Cổng " + currentGateId + " đang chạy P2P</h1><p>Lỗi: Chưa tìm thấy file index.html trong resources!</p>";
+                        exchange.getResponseHeaders().add("Content-Type", "text/html; charset=UTF-8");
+                        exchange.sendResponseHeaders(200, response.getBytes().length);
+                        OutputStream os = exchange.getResponseBody();
+                        os.write(response.getBytes());
+                        os.close();
+                    }
+                } catch (Exception e) {
+                    System.out.println("Lỗi load giao diện: " + e.getMessage());
+                }
+            }
         });
 
         // --- API 2: Nhận xe từ Web Frontend gửi vào ---
