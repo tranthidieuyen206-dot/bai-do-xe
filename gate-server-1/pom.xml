@@ -5,10 +5,10 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.baitap</groupId>
-  <artifactId>gate-server-5</artifactId>
+  <artifactId>gate-server-1</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   <packaging>jar</packaging>
-  <name>gate-server-5</name>
+  <name>gate-server-1</name>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
