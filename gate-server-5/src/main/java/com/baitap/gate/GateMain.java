@@ -22,6 +22,9 @@ import java.util.UUID;
 
 public class GateMain {
 
+    // Cuốn sổ lưu lịch sử chung của toàn hệ thống (Chống đụng độ đa luồng)
+    public static final java.util.List<String> lichSuChung = new java.util.concurrent.CopyOnWriteArrayList<>();
+
     public static void main(String[] args) throws Exception {
         Properties props = loadProperties();
         
@@ -59,7 +62,7 @@ public class GateMain {
         int port = parseInt(System.getenv("PORT"), 8080);
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
 
-     // --- API 1: HIỂN THỊ GIAO DIỆN WEB CHO NGƯỜI DÙNG ---
+        // --- API 1: HIỂN THỊ GIAO DIỆN WEB CHO NGƯỜI DÙNG ---
         server.createContext("/", exchange -> {
             if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
                 // Đọc file index.html từ thư mục resources
@@ -101,23 +104,27 @@ public class GateMain {
                     // Tạo ID ngẫu nhiên cho lượt vào bãi
                     String jobId = UUID.randomUUID().toString();
                     
-                    // Lưu vào Database của cổng này
-                 // Lưu vào Database của cổng này (Có bọc try-catch chống sập)
+                    // Lưu vào Database của cổng này (Có bọc try-catch chống sập)
                     try {
                         db.insertProcessed(jobId, bienSo, "Vao bai");
                         System.out.println("[DB] Đã lưu xe " + bienSo + " vào Database của Cổng " + currentGateId);
                     } catch (java.sql.SQLException e) {
                         System.out.println("[DB ERROR] Lỗi khi lưu vào Aiven: " + e.getMessage());
                     }
-                    // PHOÁT LOA CHO CÁC CỔNG KHÁC (Broadcast)
+                    
+                    // 1. Ghi vào sổ chung của cổng này
+                    String thongBao = "Xe " + bienSo + " vừa vào bãi qua Cổng " + currentGateId;
+                    lichSuChung.add(0, thongBao); 
+                    if(lichSuChung.size() > 20) lichSuChung.remove(20); // Chỉ giữ 20 dòng gần nhất
+                    
+                    // 2. PHÁT LOA CHO CÁC CỔNG KHÁC (Broadcast)
                     phatLoaChoAnhEm(bienSo, currentGateId);
                 }
 
-                String response = "Xe " + bienSo + " da vao cong " + currentGateId;
-                exchange.sendResponseHeaders(200, response.getBytes().length);
-                OutputStream os = exchange.getResponseBody();
-                os.write(response.getBytes());
-                os.close();
+                // Trả về báo cáo cho Web
+                exchange.sendResponseHeaders(200, "OK".getBytes().length);
+                exchange.getResponseBody().write("OK".getBytes());
+                exchange.getResponseBody().close();
             }
         });
 
@@ -128,12 +135,29 @@ public class GateMain {
                 String thongBao = new String(is.readAllBytes(), StandardCharsets.UTF_8);
 
                 System.out.println(">>> [P2P SYNC] Nhận tin báo: " + thongBao);
-                // TODO: Tại đây bạn có thể lưu thông báo vào RAM để hiển thị lên bảng "Các lượt gần đây"
+                
+                // Ghi thẳng tin nhắn của hàng xóm vào sổ chung
+                lichSuChung.add(0, "[P2P] " + thongBao); 
+                if(lichSuChung.size() > 20) lichSuChung.remove(20);
 
-                String response = "OK";
-                exchange.sendResponseHeaders(200, response.getBytes().length);
+                exchange.sendResponseHeaders(200, "OK".getBytes().length);
+                exchange.getResponseBody().write("OK".getBytes());
+                exchange.getResponseBody().close();
+            }
+        });
+
+        // --- API 4 (MỚI): Cho giao diện Web hỏi thăm lịch sử ---
+        server.createContext("/api/lich-su", exchange -> {
+            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+            if ("GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                // Ghép cuốn sổ thành 1 chuỗi dài ngăn cách bởi dấu phẩy
+                String data = String.join(",", lichSuChung);
+                byte[] bytes = data.getBytes(StandardCharsets.UTF_8);
+                
+                exchange.getResponseHeaders().add("Content-Type", "text/plain; charset=UTF-8");
+                exchange.sendResponseHeaders(200, bytes.length);
                 OutputStream os = exchange.getResponseBody();
-                os.write(response.getBytes());
+                os.write(bytes);
                 os.close();
             }
         });
