@@ -157,7 +157,7 @@
     <div class="container">
         <div class="header">
             <h1>HỆ THỐNG ĐỖ XE P2P</h1>
-            <p>Phân Luồng Tự Động (Client-Side Load Balancing)</p>
+            <p>Smart Round-Robin & Real-time Sync</p>
         </div>
 
         <div class="content">
@@ -172,9 +172,9 @@
             </div>
 
             <div class="log-section">
-                <h3>Lịch Sử Phân Luồng</h3>
+                <h3>Lịch Sử Cổng Hiện Tại</h3>
                 <ul class="log-list" id="logList">
-                    <li class="log-item" style="text-align: center; color: #9ca3af;">Chưa có xe nào vào bãi...</li>
+                    <li class="log-item" style="text-align: center; color: #9ca3af;">Đang kết nối hệ thống P2P...</li>
                 </ul>
             </div>
         </div>
@@ -185,12 +185,11 @@
         const submitBtn = document.getElementById('submitBtn');
         const inputBienSo = document.getElementById('bienSo');
         const logList = document.getElementById('logList');
-        let isFirstLog = true;
 
         // ======================================================
-        // THUẬT TOÁN SẮP XẾP HÀNG ĐỢI (ROUND-ROBIN) TẠI CLIENT
+        // 1. THUẬT TOÁN AUTO FAILOVER + ROUND-ROBIN
         // ======================================================
-        // Danh sách 3 cổng của nhóm (Nhớ sửa link nếu bạn deploy link khác nhé)
+        // Danh sách 3 cổng của nhóm
         const danhSachCong = [
             "https://gate-server-2.onrender.com",
             "https://gate-server-4.onrender.com",
@@ -206,55 +205,95 @@
             if(!bienSo) return;
 
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '⏳ Đang phân luồng...';
+            submitBtn.innerHTML = '⏳ Đang quét cổng rảnh...';
 
-            // 1. CHỌN CỔNG ĐỂ GIAO VIỆC
-            const congDuocChon = danhSachCong[luotTiepTheo];
-            
-            // 2. TĂNG LƯỢT CHO LẦN SAU
-            luotTiepTheo = (luotTiepTheo + 1) % danhSachCong.length;
+            let daGuiThanhCong = false;
+            let soLanThu = 0;
+            const tongSoCong = danhSachCong.length;
 
-            try {
-                // 3. GỬI XE THẲNG ĐẾN CỔNG VỪA ĐƯỢC CHỌN
-                const apiUrl = congDuocChon + '/api/nhan-xe';
+            // Vòng lặp: Thử tối đa 3 lần (bằng tổng số cổng)
+            while (!daGuiThanhCong && soLanThu < tongSoCong) {
+                const congDuocChon = danhSachCong[luotTiepTheo];
                 
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    body: bienSo 
-                });
+                // Chuyển lượt cho lần sau
+                luotTiepTheo = (luotTiepTheo + 1) % tongSoCong;
+                soLanThu++;
 
-                if (response.ok) {
-                    const resultText = await response.text();
-                    // In ra màn hình để biết xe vừa bị đẩy sang cổng nào
-                    const tenCong = congDuocChon.split('-')[2].replace('.onrender.com', '');
-                    addLog("✅ [Đẩy sang Cổng " + tenCong + "] " + resultText); 
-                    inputBienSo.value = ''; 
-                } else {
-                    addLog('❌ Lỗi xử lý từ cổng được phân công!');
+                try {
+                    // Âm thầm gửi thử nghiệm tới cổng đang đến lượt
+                    const apiUrl = congDuocChon + '/api/nhan-xe';
+                    const response = await fetch(apiUrl, { method: 'POST', body: bienSo });
+
+                    if (response.ok) {
+                        // Gửi thành công -> Báo cờ hiệu và thoát vòng lặp
+                        daGuiThanhCong = true;
+                        inputBienSo.value = ''; 
+                    }
+                } catch (error) {
+                    // CỔNG SẬP -> Bỏ qua và chạy tiếp vòng lặp tìm cổng khác!
+                    console.warn(`Cổng ${congDuocChon} đang sập, tự động tìm cổng khác...`);
                 }
-            } catch (error) {
-                addLog('❌ Mất kết nối! Trạm ' + congDuocChon + ' có thể đang sập!');
-                console.error(error);
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = 'Cho Xe Vào Bãi';
-                inputBienSo.focus();
+            }
+
+            // Nếu quét qua cả 3 cổng mà đều sập hết
+            if (!daGuiThanhCong) {
+                const li = document.createElement('li');
+                li.className = 'log-item';
+                li.style.color = '#e11d48';
+                li.innerHTML = `> ❌ Lỗi: Toàn bộ hệ thống đang sập hoặc mất mạng!`;
+                logList.insertBefore(li, logList.firstChild);
+            }
+
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Cho Xe Vào Bãi';
+            inputBienSo.focus();
+            
+            // Gọi hàm cập nhật màn hình để lấy lịch sử mới nhất từ server
+            if (daGuiThanhCong) {
+                fetchLichSu(); 
             }
         });
 
-        // Hàm thêm dòng lịch sử lên màn hình
-        function addLog(message) {
-            if (isFirstLog) {
+        // ======================================================
+        // 2. TỰ ĐỘNG ĐỒNG BỘ MÀN HÌNH (POLLING)
+        // ======================================================
+        async function fetchLichSu() {
+            try {
+                const response = await fetch('/api/lich-su');
+                const textData = await response.text();
+                
                 logList.innerHTML = ''; 
-                isFirstLog = false;
+                if(textData.trim() === '') {
+                    logList.innerHTML = '<li class="log-item" style="color:#9ca3af; text-align:center">Chưa có xe nào vào bãi...</li>';
+                    return;
+                }
+
+                const logs = textData.split(',');
+                
+                logs.forEach(msg => {
+                    if(msg.trim() !== '') {
+                        const li = document.createElement('li');
+                        li.className = 'log-item';
+                        
+                        // Nếu là tin từ cổng hàng xóm bắn sang -> Đổi màu đỏ cho dễ phân biệt
+                        if(msg.includes('[P2P]')) {
+                             li.style.color = '#e11d48'; 
+                        }
+                        
+                        li.innerHTML = `> ${msg}`;
+                        logList.appendChild(li);
+                    }
+                });
+            } catch (error) {
+                // Mất mạng thì im lặng chờ vòng quét 1.5s tiếp theo
             }
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('vi-VN');
-            const li = document.createElement('li');
-            li.className = 'log-item';
-            li.innerHTML = `<span class="time">[${timeString}]</span> ${message}`;
-            logList.insertBefore(li, logList.firstChild);
         }
+
+        // Cứ 1.5 giây lại tự động hỏi thăm Backend 1 lần
+        setInterval(fetchLichSu, 1500);
+        
+        // Gọi 1 lần ngay khi vừa tải xong trang web
+        fetchLichSu();
     </script>
 </body>
 </html>
