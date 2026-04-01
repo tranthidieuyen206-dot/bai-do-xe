@@ -1,244 +1,72 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Bãi Đỗ Xe P2P - Nhóm 23CNTT3</title>
-    <style>
-        /* CSS THIẾT KẾ GIAO DIỆN HIỆN ĐẠI */
-        :root {
-            --primary-color: #4f46e5;
-            --hover-color: #4338ca;
-            --bg-color: #f3f4f6;
-            --card-bg: rgba(255, 255, 255, 0.95);
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
-            min-height: 100vh;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .container {
-            width: 90%;
-            max-width: 800px;
-            background: var(--card-bg);
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .header {
-            background: var(--primary-color);
-            color: white;
-            padding: 20px;
-            text-align: center;
-        }
-
-        .header h1 {
-            margin: 0;
-            font-size: 24px;
-        }
-
-        .header p {
-            margin: 5px 0 0 0;
-            font-size: 14px;
-            opacity: 0.8;
-        }
-
-        .content {
-            display: flex;
-            padding: 30px;
-            gap: 30px;
-        }
-
-        @media (max-width: 600px) {
-            .content { flex-direction: column; }
-        }
-
-        .form-section, .log-section {
-            flex: 1;
-        }
-
-        .input-group {
-            margin-bottom: 20px;
-        }
-
-        .input-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #374151;
-        }
-
-        .input-group input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e5e7eb;
-            border-radius: 10px;
-            font-size: 16px;
-            box-sizing: border-box;
-            transition: border-color 0.3s;
-            text-transform: uppercase;
-        }
-
-        .input-group input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-        }
-
-        button {
-            width: 100%;
-            padding: 14px;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background-color 0.3s, transform 0.1s;
-        }
-
-        button:hover { background-color: var(--hover-color); }
-        button:active { transform: scale(0.98); }
-        button:disabled { background-color: #9ca3af; cursor: not-allowed; }
-
-        .log-section {
-            background: #f9fafb;
-            border-radius: 10px;
-            padding: 20px;
-            border: 1px solid #e5e7eb;
-        }
-
-        .log-section h3 {
-            margin-top: 0;
-            color: #111827;
-            border-bottom: 2px solid #e5e7eb;
-            padding-bottom: 10px;
-        }
-
-        .log-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .log-item {
-            padding: 10px;
-            border-bottom: 1px solid #e5e7eb;
-            font-size: 14px;
-            color: #4b5563;
-            animation: fadeIn 0.5s ease-in-out;
-        }
-
-        .log-item span.time {
-            font-weight: bold;
-            color: var(--primary-color);
-            margin-right: 10px;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-    </style>
-</head>
-<body>
-
-    <div class="container">
-        <div class="header">
-            <h1>HỆ THỐNG ĐỖ XE P2P</h1>
-            <p>Node Server Độc Lập - Mạng Ngang Hàng</p>
-        </div>
-
-        <div class="content">
-            <div class="form-section">
-                <form id="carForm">
-                    <div class="input-group">
-                        <label for="bienSo">Nhập Biển Số Xe:</label>
-                        <input type="text" id="bienSo" placeholder="VD: 43A-123.45" required autocomplete="off">
-                    </div>
-                    <button type="submit" id="submitBtn">Cho Xe Vào Bãi</button>
-                </form>
-            </div>
-
-            <div class="log-section">
-                <h3>Lịch Sử Trạm Hiện Tại</h3>
-                <ul class="log-list" id="logList">
-                    <li class="log-item" style="text-align: center; color: #9ca3af;">Chưa có xe nào vào bãi...</li>
-                </ul>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const form = document.getElementById('carForm');
+const form = document.getElementById('carForm');
         const submitBtn = document.getElementById('submitBtn');
         const inputBienSo = document.getElementById('bienSo');
         const logList = document.getElementById('logList');
         let isFirstLog = true;
 
+        // ======================================================
+        // THUẬT TOÁN SẮP XẾP HÀNG ĐỢI (ROUND-ROBIN) TẠI CLIENT
+        // ======================================================
+        // Điền link Render của cả 3 cổng vào đây
+        const danhSachCong = [
+            "https://gate-server-2.onrender.com",
+            "https://gate-server-4.onrender.com",
+            "https://gate-server-5.onrender.com"
+        ];
+        
+        // Biến nhớ xem đang đến lượt cổng nào tiếp khách
+        let luotTiepTheo = 0; 
+
         form.addEventListener('submit', async function(e) {
-            e.preventDefault(); // Ngăn trình duyệt load lại trang
+            e.preventDefault(); 
             
             const bienSo = inputBienSo.value.trim().toUpperCase();
             if(!bienSo) return;
 
-            // Hiệu ứng nút loading
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '⏳ Đang xử lý...';
+            submitBtn.innerHTML = '⏳ Đang phân luồng...';
+
+            // 1. CHỌN CỔNG ĐỂ GIAO VIỆC
+            const congDuocChon = danhSachCong[luotTiepTheo];
+            
+            // 2. TĂNG LƯỢT CHO LẦN SAU (Nếu đến cuối danh sách thì quay lại cổng số 0)
+            luotTiepTheo = (luotTiepTheo + 1) % danhSachCong.length;
 
             try {
-                // Gọi thẳng vào API /api/nhan-xe của chính server đang mở trang web này
-                const response = await fetch('/api/nhan-xe', {
+                // 3. GỬI XE THẲNG ĐẾN CỔNG VỪA ĐƯỢC CHỌN
+                const apiUrl = congDuocChon + '/api/nhan-xe';
+                const response = await fetch(apiUrl, {
                     method: 'POST',
-                    body: bienSo // Gửi trực tiếp chuỗi biển số vào body theo đúng code Java
+                    body: bienSo 
                 });
 
                 if (response.ok) {
                     const resultText = await response.text();
-                    addLog(resultText); // Hiển thị câu trả lời từ Java lên giao diện
-                    inputBienSo.value = ''; // Xóa trắng ô nhập liệu
+                    addLog("✅ [Phân luồng tới " + congDuocChon.split('-')[2] + "] " + resultText); 
+                    inputBienSo.value = ''; 
                 } else {
-                    addLog('❌ Lỗi xử lý từ máy chủ!');
+                    addLog('❌ Lỗi xử lý từ cổng được phân công!');
                 }
             } catch (error) {
-                addLog('❌ Mất kết nối đến Server P2P!');
+                addLog('❌ Mất kết nối! Cổng ' + congDuocChon + ' có thể đang sập!');
                 console.error(error);
             } finally {
-                // Phục hồi lại nút bấm
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = 'Cho Xe Vào Bãi';
                 inputBienSo.focus();
             }
         });
 
-        // Hàm thêm dòng lịch sử lên màn hình
+        // Hàm thêm dòng lịch sử lên màn hình (Giữ nguyên của bạn)
         function addLog(message) {
             if (isFirstLog) {
-                logList.innerHTML = ''; // Xóa dòng chữ "Chưa có xe nào"
+                logList.innerHTML = ''; 
                 isFirstLog = false;
             }
-
             const now = new Date();
             const timeString = now.toLocaleTimeString('vi-VN');
-            
             const li = document.createElement('li');
             li.className = 'log-item';
             li.innerHTML = `<span class="time">[${timeString}]</span> ${message}`;
-            
-            // Chèn lên trên cùng
             logList.insertBefore(li, logList.firstChild);
         }
-    </script>
-</body>
-</html>
